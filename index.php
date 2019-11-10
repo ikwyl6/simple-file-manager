@@ -15,6 +15,8 @@ $allow_upload = true; // Set to true to allow upload files
 $allow_create_folder = true; // Set to false to disable folder creation
 $allow_direct_link = true; // Set to false to only allow downloads and not direct link
 $allow_show_folders = true; // Set to false to hide all subdirectories
+$sort_folders_first = true; // Set to true if you want to show folders first in directory listing
+$ignore_file_case = true; // Set to true if you want to ignore case when listing files
 
 $disallowed_extensions = ['php'];  // must be an array. Extensions disallowed to be uploaded
 $hidden_extensions = ['php']; // must be an array of lowercase file extensions. Extensions hidden in directory index
@@ -63,8 +65,23 @@ if($_GET['do'] == 'list') {
 	if (is_dir($file)) {
 		$directory = $file;
 		$result = [];
+		// Start to do work for 'sort_folders_first'
 		$files = array_diff(scandir($directory), ['.','..']);
-		foreach ($files as $entry) if (!is_entry_ignored($entry, $allow_show_folders, $hidden_extensions)) {
+		$directories = [];
+		$files_in_dir = [];
+		if ($sort_folders_first) {
+			foreach ($files as $unsorted) {
+				if(is_dir($directory.'/'.$unsorted)) $directories[] = $unsorted;
+				else $files_in_dir[] = $unsorted;
+			}
+			if ($ignore_file_case) {
+				uasort($directories, 'strcasecmp');
+				uasort($files_in_dir, 'strcasecmp');
+			}
+			$sorted_files = array_merge($directories, $files_in_dir);
+		}
+		else $sorted_files = $files; 
+		foreach ($sorted_files as $entry) if (!is_entry_ignored($entry, $allow_show_folders, $hidden_extensions)) {
 		$i = $directory . '/' . $entry;
 		$stat = stat($i);
 	        $result[] = [
