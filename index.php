@@ -82,21 +82,21 @@ if($_GET['do'] == 'list') {
 		}
 		else $sorted_files = $files; 
 		foreach ($sorted_files as $entry) if (!is_entry_ignored($entry, $allow_show_folders, $hidden_extensions)) {
-		$i = $directory . '/' . $entry;
-		$stat = stat($i);
-	        $result[] = [
-	        	'mtime' => $stat['mtime'],
-	        	'size' => $stat['size'],
-	        	'name' => basename($i),
-	        	'path' => preg_replace('@^\./@', '', $i),
-	        	'is_dir' => is_dir($i),
-	        	'is_deleteable' => $allow_delete && ((!is_dir($i) && is_writable($directory)) ||
-                                                           (is_dir($i) && is_writable($directory) && is_recursively_deleteable($i))),
-	        	'is_readable' => is_readable($i),
-	        	'is_writable' => is_writable($i),
-	        	'is_executable' => is_executable($i),
-	        ];
-	    }
+			$i = $directory . '/' . $entry;
+			$stat = stat($i);
+				  $result[] = [
+					'mtime' => $stat['mtime'],
+					'size' => $stat['size'],
+					'name' => basename($i),
+					'path' => preg_replace('@^\./@', '', $i),
+					'is_dir' => is_dir($i),
+					'is_deleteable' => $allow_delete && ((!is_dir($i) && is_writable($directory)) ||
+																				  (is_dir($i) && is_writable($directory) && is_recursively_deleteable($i))),
+					'is_readable' => is_readable($i),
+					'is_writable' => is_writable($i),
+					'is_executable' => is_executable($i),
+				  ];
+		}
 	} else {
 		err(412,"Not a Directory");
 	}
