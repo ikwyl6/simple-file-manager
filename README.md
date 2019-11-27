@@ -1,4 +1,4 @@
-simple-file-manager
+simple-file-manager - Forked from jcampbell1
 ===================
 
 A Simple PHP file manager.  The code is a single php file.  
