@@ -16,8 +16,8 @@ $allow_create_folder = true; // Set to false to disable folder creation
 $allow_direct_link = true; // Set to false to only allow downloads and not direct link
 $allow_show_folders = true; // Set to false to hide all subdirectories
 
-$disallowed_extensions = ['php'];  // must be an array. Extensions disallowed to be uploaded
-$hidden_extensions = ['php']; // must be an array of lowercase file extensions. Extensions hidden in directory index
+$disallowed_patterns = ['*.php'];  // must be an array.  Matching files not allowed to be uploaded
+$hidden_patterns = ['*.php','.*']; // Matching files hidden in directory index
 
 $PASSWORD = '';  // Set the password, to access the file manager... (optional)
 
@@ -49,6 +49,9 @@ if(substr($tmp, 0,strlen($tmp_dir)) !== $tmp_dir)
 	err(403,"Forbidden");
 if(strpos($_REQUEST['file'], DIRECTORY_SEPARATOR) === 0)
 	err(403,"Forbidden");
+if(preg_match('@^.+://@',$_REQUEST['file'])) {
+	err(403,"Forbidden");
+}
 
 
 if(!$_COOKIE['_sfm_xsrf'])
@@ -59,27 +62,33 @@ if($_POST) {
 }
 
 $file = $_REQUEST['file'] ?: '.';
+
 if($_GET['do'] == 'list') {
 	if (is_dir($file)) {
 		$directory = $file;
 		$result = [];
 		$files = array_diff(scandir($directory), ['.','..']);
-		foreach ($files as $entry) if (!is_entry_ignored($entry, $allow_show_folders, $hidden_extensions)) {
-		$i = $directory . '/' . $entry;
-		$stat = stat($i);
-	        $result[] = [
-	        	'mtime' => $stat['mtime'],
-	        	'size' => $stat['size'],
-	        	'name' => basename($i),
-	        	'path' => preg_replace('@^\./@', '', $i),
-	        	'is_dir' => is_dir($i),
-	        	'is_deleteable' => $allow_delete && ((!is_dir($i) && is_writable($directory)) ||
-                                                           (is_dir($i) && is_writable($directory) && is_recursively_deleteable($i))),
-	        	'is_readable' => is_readable($i),
-	        	'is_writable' => is_writable($i),
-	        	'is_executable' => is_executable($i),
-	        ];
-	    }
+		foreach ($files as $entry) if (!is_entry_ignored($entry, $allow_show_folders, $hidden_patterns)) {
+			$i = $directory . '/' . $entry;
+			$stat = stat($i);
+			$result[] = [
+				'mtime' => $stat['mtime'],
+				'size' => $stat['size'],
+				'name' => basename($i),
+				'path' => preg_replace('@^\./@', '', $i),
+				'is_dir' => is_dir($i),
+				'is_deleteable' => $allow_delete && ((!is_dir($i) && is_writable($directory)) ||
+														(is_dir($i) && is_writable($directory) && is_recursively_deleteable($i))),
+				'is_readable' => is_readable($i),
+				'is_writable' => is_writable($i),
+				'is_executable' => is_executable($i),
+			];
+		}
+		usort($result,function($f1,$f2){
+			$f1_key = ($f1['is_dir']?:2) . $f1['name'];
+			$f2_key = ($f2['is_dir']?:2) . $f2['name'];
+			return $f1_key > $f2_key;
+		});
 	} else {
 		err(412,"Not a Directory");
 	}
@@ -100,13 +109,17 @@ if($_GET['do'] == 'list') {
 	@mkdir($_POST['name']);
 	exit;
 } elseif ($_POST['do'] == 'upload' && $allow_upload) {
-	foreach($disallowed_extensions as $ext)
-		if(preg_match(sprintf('/\.%s$/',preg_quote($ext)), $_FILES['file_data']['name']))
+	foreach($disallowed_patterns as $pattern)
+		if(fnmatch($pattern, $_FILES['file_data']['name']))
 			err(403,"Files of this type are not allowed.");
 
 	$res = move_uploaded_file($_FILES['file_data']['tmp_name'], $file.'/'.$_FILES['file_data']['name']);
 	exit;
 } elseif ($_GET['do'] == 'download') {
+	foreach($disallowed_patterns as $pattern)
+		if(fnmatch($pattern, $file))
+			err(403,"Files of this type are not allowed.");
+
 	$filename = basename($file);
 	$finfo = finfo_open(FILEINFO_MIME_TYPE);
 	header('Content-Type: ' . finfo_file($finfo, $file));
@@ -118,7 +131,7 @@ if($_GET['do'] == 'list') {
 	exit;
 }
 
-function is_entry_ignored($entry, $allow_show_folders, $hidden_extensions) {
+function is_entry_ignored($entry, $allow_show_folders, $hidden_patterns) {
 	if ($entry === basename(__FILE__)) {
 		return true;
 	}
@@ -126,12 +139,11 @@ function is_entry_ignored($entry, $allow_show_folders, $hidden_extensions) {
 	if (is_dir($entry) && !$allow_show_folders) {
 		return true;
 	}
-
-	$ext = strtolower(pathinfo($entry, PATHINFO_EXTENSION));
-	if (in_array($ext, $hidden_extensions)) {
-		return true;
+	foreach($hidden_patterns as $pattern) {
+		if(fnmatch($pattern,$entry)) {
+			return true;
+		}
 	}
-
 	return false;
 }
 
@@ -176,6 +188,7 @@ function get_absolute_path($path) {
 
 function err($code,$msg) {
 	http_response_code($code);
+	header("Content-Type: application/json");
 	echo json_encode(['error' => ['code'=>intval($code), 'msg' => $msg]]);
 	exit;
 }
@@ -396,7 +409,7 @@ $(function(){
 	}
 	function renderFileRow(data) {
 		var $link = $('<a class="name" />')
-			.attr('href', data.is_dir ? '#' + encodeURIComponent(data.path) : './'+ encodeURIComponent(data.path))
+			.attr('href', data.is_dir ? '#' + encodeURIComponent(data.path) : './' + data.path)
 			.text(data.name);
 		var allow_direct_link = <?php echo $allow_direct_link?'true':'false'; ?>;
         	if (!data.is_dir && !allow_direct_link)  $link.css('pointer-events','none');
